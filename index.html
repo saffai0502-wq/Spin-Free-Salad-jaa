@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>🎉 วงล้อสุ่มรางวัลร้านสลัดตั้ม&มด 🎉</title>
+<style>
+  body {
+    font-family: "Kanit", sans-serif;
+    background: #e4f1e1;
+    margin: 0;
+    padding: 20px;
+    text-align: center;
+    color: #2f4f2f;
+  }
+  h1 {
+    margin-bottom: 10px;
+  }
+  input[type="number"] {
+    width: 100px;
+    padding: 6px;
+    font-size: 16px;
+  }
+  button {
+    background-color: #4caf50;
+    border: none;
+    padding: 10px 18px;
+    margin-left: 10px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  button:disabled {
+    background-color: #a4c9a2;
+    cursor: not-allowed;
+  }
+  #rights {
+    margin: 10px 0 30px;
+    font-weight: bold;
+  }
+  #wheel {
+    margin: 0 auto;
+    width: 350px;
+    height: 350px;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #999;
+    position: relative;
+    overflow: hidden;
+  }
+  #wheel canvas {
+    width: 100%;
+    height: 100%;
+  }
+  /* เข็มชี้แบบชัดเจน */
+  #pointer {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    margin-left: -15px;
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-bottom: 30px solid #d63333;
+    filter: drop-shadow(0 0 3px #9e2626);
+    z-index: 10;
+  }
+  #result {
+    margin-top: 25px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #4a7c4a;
+  }
+  #toast {
+    visibility: hidden;
+    min-width: 250px;
+    margin-left: -125px;
+    background-color: #4caf50;
+    color: #fff;
+    text-align: center;
+    border-radius: 8px;
+    padding: 15px;
+    position: fixed;
+    z-index: 9999;
+    left: 50%;
+    top: 30%;
+    font-size: 18px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+  }
+  #toast.show {
+    visibility: visible;
+    opacity: 1;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎉 วงล้อสุ่มรางวัลร้านสลัดตั้ม&มด 🎉</h1>
+
+<label for="moneyInput">กรอกจำนวนเงิน (บาท): </label>
+<input id="moneyInput" type="number" min="0" step="1" value="0" />
+<button id="addRightBtn">เพิ่มสิทธิ์</button>
+
+<div id="rights">สิทธิ์ของคุณ: 0</div>
+
+<div id="wheel">
+  <div id="pointer"></div>
+  <canvas id="canvas" width="350" height="350"></canvas>
+</div>
+
+<button id="spinBtn" disabled>หมุนวงล้อ</button>
+
+<div id="result"></div>
+
+<div id="toast"></div>
+
+<script>
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const spinBtn = document.getElementById("spinBtn");
+  const addRightBtn = document.getElementById("addRightBtn");
+  const moneyInput = document.getElementById("moneyInput");
+  const rightsDisplay = document.getElementById("rights");
+  const resultDisplay = document.getElementById("result");
+  const toast = document.getElementById("toast");
+
+  // กำหนดรางวัลกระจายแบบสลับส่วนลดกับไม่ได้รางวัล
+  const prizeTexts = [
+    "ส่วนลด 20 บาท",
+    "ไม่ได้รางวัล",
+    "ส่วนลด 10 บาท",
+    "ไม่ได้รางวัล",
+    "ไม่ได้รางวัล",
+    "ส่วนลด 15 บาท",
+    "ไม่ได้รางวัล",
+    "ส่วนลด 10 บาท",
+    "ไม่ได้รางวัล",
+    "ส่วนลด 20 บาท",
+    "ไม่ได้รางวัล",
+    "ไม่ได้รางวัล",
+    "ALLสลัดฟรี 1 ชุด",
+    "ไม่ได้รางวัล",
+    "ส่วนลด 10 บาท",
+    "ไม่ได้รางวัล",
+    "ไม่ได้รางวัล",
+    "ส่วนลด 20 บาท",
+    "ไม่ได้รางวัล",
+    "ไม่ได้รางวัล",
+  ];
+
+  // กำหนดสีวงล้อ (สลับโทนเขียวอ่อนกับเทา)
+  const colors = [
+    "#b7e4c7", "#c0c0c0", "#a3d9a5", "#c0c0c0", "#c0c0c0",
+    "#91c788", "#c0c0c0", "#74b866", "#c0c0c0", "#5ca354",
+    "#c0c0c0", "#c0c0c0", "#e6c12f", "#c0c0c0", "#a3d9a5",
+    "#c0c0c0", "#c0c0c0", "#6ea260", "#c0c0c0", "#c0c0c0"
+  ];
+
+  const segments = prizeTexts.map((text, i) => ({
+    text,
+    color: colors[i] || "#ccc"
+  }));
+
+  let currentAngle = 0;
+  let spinTimeout = null;
+  let spinAngleStart = 0;
+  let spinTime = 0;
+  let spinTimeTotal = 0;
+
+  let rights = 0;
+
+  function drawWheel() {
+    const arc = (2 * Math.PI) / segments.length;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i < segments.length; i++) {
+      const angle = currentAngle + i * arc;
+      ctx.fillStyle = segments[i].color;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, canvas.height / 2);
+      ctx.arc(
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width / 2 - 10,
+        angle,
+        angle + arc,
+        false
+      );
+      ctx.lineTo(canvas.width / 2, canvas.height / 2);
+      ctx.fill();
+
+      // ข้อความแบบเว้นระยะให้ไม่ซ้อน
+      ctx.save();
+      ctx.fillStyle = "#2f4f2f";
+      ctx.translate(
+        canvas.width / 2 + Math.cos(angle + arc / 2) * (canvas.width / 2 - 60),
+        canvas.height / 2 + Math.sin(angle + arc / 2) * (canvas.height / 2 - 60)
+      );
+      ctx.rotate(angle + arc / 2 + Math.PI / 2);
+      ctx.font = "bold 14px Kanit, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(segments[i].text, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  function spin() {
+    if (rights < 1) {
+      alert("คุณไม่มีสิทธิ์หมุนวงล้อ กรุณาเพิ่มสิทธิ์ก่อน");
+      return;
+    }
+    spinAngleStart = Math.random() * 10 + 10;
+    spinTime = 0;
+    spinTimeTotal = Math.random() * 4 + 4;
+    rotateWheel();
+  }
+
+  function rotateWheel() {
+    spinTime += 0.03;
+    if (spinTime >= spinTimeTotal) {
+      stopRotateWheel();
+      return;
+    }
+    const spinAngle = spinAngleStart * (1 - spinTime / spinTimeTotal);
+    currentAngle += (spinAngle * Math.PI) / 180;
+    drawWheel();
+    spinTimeout = requestAnimationFrame(rotateWheel);
+  }
+
+  function stopRotateWheel() {
+    cancelAnimationFrame(spinTimeout);
+    currentAngle = currentAngle % (2 * Math.PI);
+
+    const arc = (2 * Math.PI) / segments.length;
+    // คำนวณ index รางวัล โดยดูตำแหน่งเข็มชี้ (อยู่ที่ 0 rad)
+    const index = Math.floor((2 * Math.PI - currentAngle + arc / 2) / arc) % segments.length;
+    const prize = segments[index].text;
+
+    resultDisplay.textContent = `🎉 ผลลัพธ์: ${prize}`;
+
+    showToast(prize === "ไม่ได้รางวัล" ? "เสียใจด้วย คุณไม่ได้รางวัล" : `เย่ ยินดีด้วย! คุณได้รับรางวัล: ${prize}`);
+
+    rights--;
+    updateRights();
+  }
+
+  function updateRights() {
+    rightsDisplay.textContent = `สิทธิ์ของคุณ: ${rights}`;
+    spinBtn.disabled = rights < 1;
+  }
+
+  function showToast(message) {
+    toast.textContent = message;
+    toast.className = "show";
+    setTimeout(() => {
+      toast.className = toast.className.replace("show", "");
+    }, 3000);
+  }
+
+  addRightBtn.addEventListener("click", () => {
+    let money = parseInt(moneyInput.value);
+    if (isNaN(money) || money <= 0) {
+      alert("กรุณากรอกจำนวนเงินที่ถูกต้อง");
+      return;
+    }
+    let addRights = Math.floor(money / 50);
+    if(addRights < 1){
+      alert("ยอดซื้อขั้นต่ำ 50 บาทจึงจะได้สิทธิ์");
+      return;
+    }
+    rights += addRights;
+    updateRights();
+    moneyInput.value = 0;
+  });
+
+  spinBtn.addEventListener("click", spin);
+
+  drawWheel();
+</script>
+
+</body>
+</html>
